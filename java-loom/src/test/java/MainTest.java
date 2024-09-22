@@ -19,7 +19,7 @@ public class MainTest {
             scenarioServer.withExposedPorts(8080).waitingFor(new HttpWaitStrategy()).start();
 
             var url = new URI("http://" + scenarioServer.getHost() + ":" + scenarioServer.getFirstMappedPort());
-            var scenarios = new Main.Scenarios(url);
+            var scenarios = new OriginalScenarios(url);
             assertThat(scenarios.results(), CoreMatchers.everyItem(equalTo("right")));
         }
     }

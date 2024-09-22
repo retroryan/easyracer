@@ -31,6 +31,11 @@ tasks.withType<JavaExec> {
     jvmArgs("--enable-preview")
 }
 
+// Enable standard input for the 'run' task
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
+}
+
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     jvmArgs("--enable-preview")
