@@ -61,6 +61,19 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**  Race 2 concurrent requests. and the winner is the first request to return a 200 response with a body containing right
+     *
+     *   Use ShutdownOnSuccess -A StructuredTaskScope that captures the result of the first subtask to complete successfully.
+     *    Once captured, it shuts down the task scope to interrupt unfinished threads and wakeup the task scope owner.
+     *    The policy implemented by this class is intended for cases where the result of any subtask will do ("invoke any")
+     *    and where the results of other unfinished subtasks are no longer needed.
+     *
+     *
+     *
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private String runScenario1() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/1")).build();
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
@@ -259,7 +272,7 @@ public class ScopedValuesScenarios {
         final String id;
 
         public Req() throws IOException, InterruptedException {
-            LOGGER.info("Opening resource for " + RESOURCE_NAME.get());
+            LOGGER.info("Opening resource for operation id " + OPERATION_ID.get() + " resource name: " + RESOURCE_NAME.get());
             id = client.send(openReq, HttpResponse.BodyHandlers.ofString()).body();
         }
 
