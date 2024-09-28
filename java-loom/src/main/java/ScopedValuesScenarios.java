@@ -61,14 +61,13 @@ public class ScopedValuesScenarios {
         }
     }
 
-    /**  Race 2 concurrent requests. and the winner is the first request to return a 200 response with a body containing right
-     *
-     *   Use ShutdownOnSuccess -A StructuredTaskScope that captures the result of the first subtask to complete successfully.
-     *    Once captured, it shuts down the task scope to interrupt unfinished threads and wakeup the task scope owner.
-     *    The policy implemented by this class is intended for cases where the result of any subtask will do ("invoke any")
-     *    and where the results of other unfinished subtasks are no longer needed.
-     *
-     *
+    /**
+     * Race 2 concurrent requests. and the winner is the first request to return a 200 response with a body containing right
+     * <p>
+     * Use ShutdownOnSuccess -A StructuredTaskScope that captures the result of the first subtask to complete successfully.
+     * Once captured, it shuts down the task scope to interrupt unfinished threads and wakeup the task scope owner.
+     * The policy implemented by this class is intended for cases where the result of any subtask will do ("invoke any")
+     * and where the results of other unfinished subtasks are no longer needed.
      *
      * @return
      * @throws InterruptedException
@@ -94,6 +93,14 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Race 2 concurrent requests, where one produces a connection error
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private String runScenario2() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/2")).build();
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
@@ -114,6 +121,14 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Race 10,000 concurrent requests
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private String runScenario3() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/3")).build();
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
@@ -135,18 +150,26 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Race 2 concurrent requests but 1 of them should have a 1 second timeout
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private String runScenario4() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/4")).build();
         try (var outer = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
             outer.fork(() -> {
                 try (var inner = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
-                    inner.fork(() -> client.send(req, HttpResponse.BodyHandlers.ofString()).body());
+                    inner.fork(() -> sendRequest(req));
                     inner.joinUntil(Instant.now().plusSeconds(1));
                     return inner.result();
                 }
             });
 
-            outer.fork(() -> client.send(req, HttpResponse.BodyHandlers.ofString()).body());
+            outer.fork(() -> sendRequest(req));
 
             outer.join();
 
@@ -164,6 +187,12 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Race 2 concurrent requests where a non-200 response is a loser
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     */
     private String runScenario5() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/5")).build();
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
@@ -184,6 +213,12 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Race 3 concurrent requests where a non-200 response is a loser
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     */
     private String runScenario6() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/6")).build();
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
@@ -205,6 +240,12 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Start a request, wait at least 3 seconds then start a second request (hedging)
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     */
     private String runScenario7() throws InterruptedException, ExecutionException {
         var req = HttpRequest.newBuilder(url.resolve("/7")).build();
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
@@ -244,8 +285,21 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Race 2 concurrent requests that "use" a resource which is obtained and released through other requests.
+     * The "use" request can return a non-20x request, in which case it is not a winner.
+     * <p>
+     * GET /8?open
+     * GET /8?use=<id obtained from open request>
+     * GET /8?close=<id obtained from open request>
+     * The winner returns a 200 response with a body containing right
+     *
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private String runScenario8() throws InterruptedException, ExecutionException {
-        try (var scope = new StructuredTaskScope.ShutdownOnSuccess<HttpResponse<String>>()) {
+        try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
             scope.fork(() -> ScopedValue.where(RESOURCE_NAME, "Resource 1").call(() -> {
                 try (var req = new Req()) {
                     return req.make();
@@ -257,7 +311,7 @@ public class ScopedValuesScenarios {
                 }
             }));
             scope.join();
-            return scope.result().body();
+            return scope.result();
         }
     }
 
@@ -271,25 +325,20 @@ public class ScopedValuesScenarios {
 
         final String id;
 
-        public Req() throws IOException, InterruptedException {
+        public Req() throws Exception {
             LOGGER.info("Opening resource for operation id " + OPERATION_ID.get() + " resource name: " + RESOURCE_NAME.get());
-            id = client.send(openReq, HttpResponse.BodyHandlers.ofString()).body();
+            id = sendRequest(openReq);
         }
 
-        HttpResponse<String> make() throws Exception {
+        String make() throws Exception {
             LOGGER.info("Using resource " + id + " for " + RESOURCE_NAME.get());
-            var resp = client.send(useReq.apply(id), HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() == 200) {
-                return resp;
-            } else {
-                throw new RuntimeException("Unexpected status code: " + resp.statusCode());
-            }
+            return sendRequestWithStatusCheck(useReq.apply(id));
         }
 
         @Override
-        public void close() throws IOException, InterruptedException {
+        public void close() throws Exception {
             LOGGER.info("Closing resource " + id + " for " + RESOURCE_NAME.get());
-            client.send(closeReq.apply(id), HttpResponse.BodyHandlers.ofString());
+            sendRequest(closeReq.apply(id));
         }
     }
 
@@ -298,6 +347,8 @@ public class ScopedValuesScenarios {
 
     private static final ScopedValue<Integer> REQUEST_NUMBER = ScopedValue.newInstance();
 
+    private record TimedResponse(Instant time, String response, int requestNumber) {
+    }
 
     public String scenario9() {
         LOGGER.info("Calling method: scenario9");
@@ -310,44 +361,63 @@ public class ScopedValuesScenarios {
         }
     }
 
+    /**
+     * Make 10 concurrent requests where 5 return a 200 response with a letter
+     * When assembled in order of when they responded, form the "right" answer
+     *
+     * @return
+     * @throws InterruptedException
+     */
     private String runScenario9() throws InterruptedException {
-        record TimedResponse(Instant time, String response, int requestNumber) {
-        }
-
         List<TimedResponse> responses = new ArrayList<>();
 
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             List<StructuredTaskScope.Subtask<TimedResponse>> tasks = IntStream.range(0, 10)
-                    .mapToObj(i -> scope.fork(() -> ScopedValue.where(REQUEST_NUMBER, i + 1).call(() -> {
-                        HttpRequest request = HttpRequest.newBuilder(url.resolve("/9")).build();
-                        try {
-                            String response = sendRequestWithStatusCheck(request);
-                            return new TimedResponse(Instant.now(), response, REQUEST_NUMBER.get());
-                        } catch (RuntimeException e) {
-                            LOGGER.info("Non-200 status received for request " + REQUEST_NUMBER.get() + ": " + e.getMessage());
-                            return new TimedResponse(Instant.now(), null, REQUEST_NUMBER.get());
-                        }
-                    })))
-                    .toList();
-
+                    .mapToObj(i -> scope.fork(() ->
+                            executeRequest(i + 1))
+                    ).toList();
             scope.join();
             scope.throwIfFailed();
-
-            for (var task : tasks) {
-                TimedResponse result = task.get();
-                if (result.response != null) {
-                    responses.add(result);
-                }
-            }
+            processTaskResults(tasks, responses);
         } catch (ExecutionException e) {
             LOGGER.warning("One or more requests failed: " + e.getMessage());
         }
 
+        return assembleResult(responses);
+    }
+
+    private TimedResponse executeRequest(int requestNumber) throws Exception {
+        return ScopedValue.where(REQUEST_NUMBER, requestNumber).call(() -> {
+            HttpRequest request = HttpRequest.newBuilder(url.resolve("/9")).build();
+            try {
+                String response = sendRequestWithStatusCheck(request);
+                return new TimedResponse(Instant.now(), response, REQUEST_NUMBER.get());
+            } catch (RuntimeException e) {
+                LOGGER.info(() -> String.format("Non-200 status received for request %d: %s", REQUEST_NUMBER.get(), e.getMessage()));
+                return new TimedResponse(Instant.now(), null, REQUEST_NUMBER.get());
+            }
+        });
+    }
+
+    private void processTaskResults(List<StructuredTaskScope.Subtask<TimedResponse>> tasks, List<TimedResponse> responses) {
+        for (var task : tasks) {
+            try {
+                TimedResponse result = task.get();
+                if (result.response() != null) {
+                    responses.add(result);
+                }
+            } catch (Exception e) {
+                LOGGER.warning("Failed to get task result: " + e.getMessage());
+            }
+        }
+    }
+
+    private String assembleResult(List<TimedResponse> responses) {
         String result = responses.stream()
                 .sorted(Comparator.comparing(TimedResponse::time))
                 .map(tr -> {
-                    LOGGER.info("Request " + tr.requestNumber + " responded with: " + tr.response);
-                    return tr.response;
+                    LOGGER.info(() -> String.format("Request %d responded with: %s", tr.requestNumber(), tr.response()));
+                    return tr.response();
                 })
                 .reduce("", String::concat);
 
@@ -412,7 +482,8 @@ public class ScopedValuesScenarios {
     }
 
     List<String> results() throws ExecutionException, InterruptedException {
-        return List.of(scenario1(), scenario2(), scenario3(), scenario4(), scenario5(), scenario6(), scenario7(), scenario8(), scenario9());
+        //return List.of(scenario1(), scenario2(), scenario3(), scenario4(), scenario5(), scenario6(), scenario7(), scenario8(), scenario9());
+        return List.of(scenario1(), scenario2(), scenario4(), scenario5(), scenario6(), scenario7(), scenario8(), scenario9());
         //return List.of(scenario10());
     }
 }
