@@ -273,6 +273,7 @@ public class ScopedValuesScenarios {
 
     //Scenario 8 - resource management
     private static final ScopedValue<String> RESOURCE_NAME = ScopedValue.newInstance();
+    private static final ScopedValue<String> RESOURCE_ID = ScopedValue.newInstance();
 
     public String scenario8() {
         LOGGER.info("Calling method: scenario8");
@@ -301,50 +302,55 @@ public class ScopedValuesScenarios {
     private String runScenario8() throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
             scope.fork(() -> ScopedValue.where(RESOURCE_NAME, "Resource 1").call(() -> {
-                try (var req = new Req()) {
-                    return req.make();
-                }
+                return ScopedValue.callWhere(RESOURCE_ID, openResource(), () -> {
+                    try (var req = new Req()) {
+                        return req.make();
+                    }
+                });
             }));
             scope.fork(() -> ScopedValue.where(RESOURCE_NAME, "Resource 2").call(() -> {
-                try (var req = new Req()) {
-                    return req.make();
-                }
+                return ScopedValue.callWhere(RESOURCE_ID, openResource(), () -> {
+                    try (var req = new Req()) {
+                        return req.make();
+                    }
+                });
             }));
             scope.join();
             return scope.result();
         }
     }
 
+    private String openResource() throws Exception {
+        LOGGER.info("Opening resource for operation id " + OPERATION_ID.get() + " resource name: " + RESOURCE_NAME.get());
+        HttpRequest openReq = HttpRequest.newBuilder(url.resolve("/8?open")).build();
+        return sendRequest(openReq);
+    }
+
     class Req implements AutoCloseable {
-        final HttpRequest openReq =
-                HttpRequest.newBuilder(url.resolve("/8?open")).build();
         final Function<String, HttpRequest> useReq = (id) ->
                 HttpRequest.newBuilder(url.resolve("/8?use=" + id)).build();
         final Function<String, HttpRequest> closeReq = (id) ->
                 HttpRequest.newBuilder(url.resolve("/8?close=" + id)).build();
 
-        final String id;
-
-        public Req() throws Exception {
-            LOGGER.info("Opening resource for operation id " + OPERATION_ID.get() + " resource name: " + RESOURCE_NAME.get());
-            id = sendRequest(openReq);
+        public Req() {
+            // The resourceID is now a scoped value, so we don't need to set it here
+            LOGGER.info("Req instance created for resource ID: " + RESOURCE_ID.get());
         }
 
         String make() throws Exception {
-            LOGGER.info("Using resource " + id + " for " + RESOURCE_NAME.get());
-            return sendRequestWithStatusCheck(useReq.apply(id));
+            LOGGER.info("Using resource " + RESOURCE_ID.get() + " for " + RESOURCE_NAME.get());
+            return sendRequestWithStatusCheck(useReq.apply(RESOURCE_ID.get()));
         }
 
         @Override
         public void close() throws Exception {
-            LOGGER.info("Closing resource " + id + " for " + RESOURCE_NAME.get());
-            sendRequest(closeReq.apply(id));
+            LOGGER.info("Closing resource " + RESOURCE_ID.get() + " for " + RESOURCE_NAME.get());
+            sendRequest(closeReq.apply(RESOURCE_ID.get()));
         }
     }
 
 
     //Scenario 9
-
     private static final ScopedValue<Integer> REQUEST_NUMBER = ScopedValue.newInstance();
 
     private record TimedResponse(Instant time, String response, int requestNumber) {

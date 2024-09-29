@@ -83,9 +83,6 @@ object EasyRacerClient:
 
   /** Race 10,000 concurrent requests The winner returns a 200 response with a body containing right
     *
-   *
-   * 10,000 errors out so I changed this to 1000
-   *
     * @param scenarioUrl
     * @return
     */
@@ -94,7 +91,7 @@ object EasyRacerClient:
     println(s"Calling scenario 3 with url: $url")
 
     supervised {
-      val forks = (1 to 1000).map { _ =>
+      val forks = (1 to 10000).map { _ =>
         fork {
           val id = s"scenario3-req-${UUID.randomUUID()}"
           requestId.supervisedWhere(id) {
