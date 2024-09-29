@@ -26,19 +26,18 @@ object EasyRacerClient:
       .response(asStringAlways)
       .mapResponse { response =>
         println(s"[Request ID: $id] Received response from: $uri")
+        // . TODO - how can we get the response and not a string?
+        // . println(s"[Request ID: $id] Status: ${response.code}, Body: ${response.body}")
         response
       }
 
-
   /** Race 2 concurrent requests. and the winner is the first request to return a 200 response with a body containing right
-   *
-   *  A number of computations can be raced against each other using the race method.
-   *  The losing computation is interrupted. race waits until both branches finish;
-   *  this also applies to the losing one, which might take a while to clean up after interruption.
-   *
-   *  race returns the first result, or re-throws the last exception
-   *
-   */
+    *
+    * A number of computations can be raced against each other using the race method. The losing computation is interrupted. race waits
+    * until both branches finish; this also applies to the losing one, which might take a while to clean up after interruption.
+    *
+    * race returns the first result, or re-throws the last exception
+    */
   def scenario1(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(1)
     println(s"Calling scenario 1 with url: $url")
@@ -54,13 +53,11 @@ object EasyRacerClient:
       race(req1.join(), req2.join())
     }
 
-  /**
-   *   Race 2 concurrent requests, where one produces a connection error
-   *   The winner returns a 200 response with a body containing right
-   *
-   * @param scenarioUrl
-   * @return
-   */
+  /** Race 2 concurrent requests, where one produces a connection error The winner returns a 200 response with a body containing right
+    *
+    * @param scenarioUrl
+    * @return
+    */
   def scenario2(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(2)
     println(s"Calling scenario 2 with url: $url")
@@ -81,14 +78,11 @@ object EasyRacerClient:
       race(req, req)
     }
 
-  /**
-   *  Race 10,000 concurrent requests
-   *  The winner returns a 200 response with a body containing right
-   *
-   *
-   * @param scenarioUrl
-   * @return
-   */
+  /** Race 10,000 concurrent requests The winner returns a 200 response with a body containing right
+    *
+    * @param scenarioUrl
+    * @return
+    */
   def scenario3(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(3)
     println(s"Calling scenario 3 with url: $url")
@@ -96,49 +90,42 @@ object EasyRacerClient:
       scenarioRequest(url).send(backend)
     race(reqs).body
 
-  /**
-   * Race 2 concurrent requests but 1 of them should have a 1 second timeout
-   * The winner returns a 200 response with a body containing right
-   *
-   * @param scenarioUrl
-   * @return
-   */
+  /** Race 2 concurrent requests but 1 of them should have a 1 second timeout The winner returns a 200 response with a body containing right
+    *
+    * @param scenarioUrl
+    * @return
+    */
   def scenario4(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(4)
     println(s"Calling scenario 4 with url: $url")
     def req = scenarioRequest(url).send(backend).body
     race(timeout(1.second)(req), req)
 
-  /**
-   * Race 2 concurrent requests where a non-200 response is a loser
-   * The winner returns a 200 response with a body containing right
-   *
-   * @param scenarioUrl
-   * @return
-   */
+  /** Race 2 concurrent requests where a non-200 response is a loser The winner returns a 200 response with a body containing right
+    *
+    * @param scenarioUrl
+    * @return
+    */
   def scenario5(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(5)
     println(s"Calling scenario 5 with url: $url")
     def req = basicRequest.get(url).response(asString.getRight).send(backend).body
     race(req, req)
 
-  /**
-   * Race 3 concurrent requests where a non-200 response is a loser
-   * The winner returns a 200 response with a body containing right
-   *
-   * @param scenarioUrl
-   * @return
-   */
+  /** Race 3 concurrent requests where a non-200 response is a loser The winner returns a 200 response with a body containing right
+    *
+    * @param scenarioUrl
+    * @return
+    */
   def scenario6(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(6)
     println(s"Calling scenario 6 with url: $url")
     def req = basicRequest.get(url).response(asString.getRight).send(backend).body
     race(req, req, req)
 
-  /**
-  * Start a request, wait at least 3 seconds then start a second request (hedging)
-  * The winner returns a 200 response with a body containing right
-  */
+  /** Start a request, wait at least 3 seconds then start a second request (hedging) The winner returns a 200 response with a body
+    * containing right
+    */
   def scenario7(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(7)
     println(s"Calling scenario 7 with url: $url")
@@ -148,34 +135,65 @@ object EasyRacerClient:
       req
     race(req, delayedReq)
 
-  /**
-   * Race 2 concurrent requests that "use" a resource which is obtained and released through other requests. 
-   * The "use" request can return a non-20x request, in which case it is not a winner.
-   *
-   * GET /8?open
-   * GET /8?use=<id obtained from open request>
-   * GET /8?close=<id obtained from open request>
-   * The winner returns a 200 response with a body containing right
-   *
-   * @param scenarioUrl
-   * @return
-   */
-  def scenario8(scenarioUrl: Int => Uri): String =
-    def req(url: Uri) = basicRequest.get(url).response(asString.getRight).send(backend).body
+  /** Scenario 8 - demonstrates using resources and LocalThread */
+  private val resourceId = ForkLocal("")
 
+  /** Race 2 concurrent requests that "use" a resource which is obtained and released through other requests. The "use" request can return a
+    * non-20x request, in which case it is not a winner.
+    *
+    * GET /8?open GET /8?use=<id obtained from open request> GET /8?close=<id obtained from open request> The winner returns a 200 response
+    * with a body containing right
+    *
+    * @param scenarioUrl
+    * @return
+    */
+  def scenario8(scenarioUrl: Int => Uri): String =
     val urlForScenario8 = scenarioUrl(8)
     println(s"Calling scenario 8 with url: $urlForScenario8")
 
-    def open = req(uri"$urlForScenario8?open")
-    def use(id: String) = req(uri"$urlForScenario8?use=$id")
-    def close(id: String) = req(uri"$urlForScenario8?close=$id")
+    def req(url: Uri): Response[String] =
+      val id = requestId.get()
+      Try(scenarioRequest(url).send(backend)) match
+        case Success(response) => response
+        case Failure(error) =>
+          println(s"[Request ID: $id] Error: ${error.getMessage}")
+          throw error
 
-    def reqRes =
-      val id = open
-      try use(id)
-      finally close(id)
+    def openResponse: Response[String] =
+      req(uri"$urlForScenario8?open")
 
-    race(reqRes, reqRes)
+    def useResponse: Response[String] =
+      req(uri"$urlForScenario8?use=${resourceId.get()}")
+
+    def closeResponse: Response[String] =
+      req(uri"$urlForScenario8?close=${resourceId.get()}")
+
+    def reqRes: Either[String, String] =
+      val reqId = s"scenario8-req-${UUID.randomUUID()}"
+      requestId.supervisedWhere(reqId) {
+        println(s"Starting request with ID: ${requestId.get()}")
+        val open = openResponse
+        if !open.code.isSuccess then Left(s"Open request failed: ${open.code}")
+        else
+          resourceId.supervisedWhere(open.body) {
+            try
+              val use = useResponse
+              if use.code.isSuccess then Right(use.body)
+              else Left(s"Use request failed: ${use.code}")
+            finally
+              val close = closeResponse
+              println(s"[Request ID: ${requestId.get()}] Close response: ${close.code}")
+          }
+      }
+
+    supervised {
+      val results = List(fork(reqRes), fork(reqRes)).map(_.join())
+      results.collectFirst { case Right(result) => result } match
+        case Some(result) => result
+        case None =>
+          val errors = results.collect { case Left(error) => error }
+          throw new Exception(s"All requests failed: ${errors.mkString(", ")}")
+    }
 
 //  def scenario8a(scenarioUrl: Int => Uri): String = supervised {
 //    def req(url: Uri) = basicRequest.get(url).response(asString.getRight).send(backend).body
@@ -195,13 +213,12 @@ object EasyRacerClient:
 //    race(reqRes, reqRes)
 //  }
 
-  /**
-   * Make 10 concurrent requests where 5 return a 200 response with a letter
-   * When assembled in order of when they responded, form the "right" answer
-   *
-   * @param scenarioUrl
-   * @return
-   */
+  /** Make 10 concurrent requests where 5 return a 200 response with a letter When assembled in order of when they responded, form the
+    * "right" answer
+    *
+    * @param scenarioUrl
+    * @return
+    */
   def scenario9(scenarioUrl: Int => Uri): String =
     def req =
       val body = basicRequest.get(scenarioUrl(9)).response(asString.getRight).send(backend).body
@@ -253,9 +270,9 @@ object EasyRacerClient:
   import EasyRacerClient.*
   def scenarioUrl(scenario: Int) = uri"http://localhost:8080/$scenario"
 //  def scenarios = Seq(scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario7, scenario8, scenario9, scenario10)
-  def scenarios = Seq(scenario1, scenario2, scenario4, scenario5, scenario6, scenario7, scenario8)
+//  def scenarios = Seq(scenario1, scenario2, scenario4, scenario5, scenario6, scenario7, scenario8)
 
-//  def scenarios: Seq[(Int => Uri) => String] = Seq(scenario8)
+  def scenarios: Seq[(Int => Uri) => String] = Seq(scenario8)
 //def scenarios: Seq[(Int => Uri) => String] = Seq(scenario10)
   scenarios.foreach: s =>
     println(s(scenarioUrl))
