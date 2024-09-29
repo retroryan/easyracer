@@ -8,32 +8,87 @@ import sttp.model.Uri.QuerySegment
 
 import java.lang.management.ManagementFactory
 import java.security.MessageDigest
+import java.util.UUID
 import scala.annotation.tailrec
-import scala.util.Random
+import scala.util.{Failure, Random, Success, Try}
 
 object EasyRacerClient:
   private val backend = HttpClientSyncBackend()
-  private def scenarioRequest(uri: Uri): Request[String, Any] = basicRequest.get(uri).response(asStringAlways)
 
-  /** A number of computations can be raced against each other using the race method.
-   *  The losing computation is interrupted. race waits until both branches finish; 
+  // Create a ForkLocal to store a request ID
+  private val requestId = ForkLocal(UUID.randomUUID().toString)
+
+  private def scenarioRequest(uri: Uri): Request[String, Any] =
+    val id = requestId.get()
+    println(s"[Request ID: $id] Sending request to: $uri")
+    basicRequest
+      .get(uri)
+      .response(asStringAlways)
+      .mapResponse { response =>
+        println(s"[Request ID: $id] Received response from: $uri")
+        response
+      }
+
+
+  /** Race 2 concurrent requests. and the winner is the first request to return a 200 response with a body containing right
+   *
+   *  A number of computations can be raced against each other using the race method.
+   *  The losing computation is interrupted. race waits until both branches finish;
    *  this also applies to the losing one, which might take a while to clean up after interruption.
-   *  
+   *
    *  race returns the first result, or re-throws the last exception
-   * 
+   *
    */
   def scenario1(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(1)
     println(s"Calling scenario 1 with url: $url")
-    def req = scenarioRequest(url).send(backend).body
-    race(req, req)
 
+    def req(id: String) = requestId.supervisedWhere(id) {
+      println(s"Starting request with ID: ${requestId.get()}")
+      scenarioRequest(url).send(backend).body
+    }
+
+    supervised {
+      val req1 = fork { req(s"scenario1-req1-${UUID.randomUUID()}") }
+      val req2 = fork { req(s"scenario1-req2-${UUID.randomUUID()}") }
+      race(req1.join(), req2.join())
+    }
+
+  /**
+   *   Race 2 concurrent requests, where one produces a connection error
+   *   The winner returns a 200 response with a body containing right
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario2(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(2)
     println(s"Calling scenario 2 with url: $url")
-    def req = scenarioRequest(url).send(backend)
-    race(req, req).body
 
+    def req = supervised {
+      val id = s"scenario2-req-${UUID.randomUUID()}"
+      requestId.supervisedWhere(id) {
+        println(s"Starting request with ID: ${requestId.get()}")
+        Try(scenarioRequest(url).send(backend)) match
+          case Success(response) => response.body
+          case Failure(error) =>
+            println(s"[Request ID: ${requestId.get()}] Error: ${error.getMessage}")
+            throw error
+      }
+    }
+
+    supervised {
+      race(req, req)
+    }
+
+  /**
+   *  Race 10,000 concurrent requests
+   *  The winner returns a 200 response with a body containing right
+   *
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario3(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(3)
     println(s"Calling scenario 3 with url: $url")
@@ -41,24 +96,49 @@ object EasyRacerClient:
       scenarioRequest(url).send(backend)
     race(reqs).body
 
+  /**
+   * Race 2 concurrent requests but 1 of them should have a 1 second timeout
+   * The winner returns a 200 response with a body containing right
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario4(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(4)
     println(s"Calling scenario 4 with url: $url")
     def req = scenarioRequest(url).send(backend).body
     race(timeout(1.second)(req), req)
 
+  /**
+   * Race 2 concurrent requests where a non-200 response is a loser
+   * The winner returns a 200 response with a body containing right
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario5(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(5)
     println(s"Calling scenario 5 with url: $url")
     def req = basicRequest.get(url).response(asString.getRight).send(backend).body
     race(req, req)
 
+  /**
+   * Race 3 concurrent requests where a non-200 response is a loser
+   * The winner returns a 200 response with a body containing right
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario6(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(6)
     println(s"Calling scenario 6 with url: $url")
     def req = basicRequest.get(url).response(asString.getRight).send(backend).body
     race(req, req, req)
 
+  /**
+  * Start a request, wait at least 3 seconds then start a second request (hedging)
+  * The winner returns a 200 response with a body containing right
+  */
   def scenario7(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(7)
     println(s"Calling scenario 7 with url: $url")
@@ -68,6 +148,18 @@ object EasyRacerClient:
       req
     race(req, delayedReq)
 
+  /**
+   * Race 2 concurrent requests that "use" a resource which is obtained and released through other requests. 
+   * The "use" request can return a non-20x request, in which case it is not a winner.
+   *
+   * GET /8?open
+   * GET /8?use=<id obtained from open request>
+   * GET /8?close=<id obtained from open request>
+   * The winner returns a 200 response with a body containing right
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario8(scenarioUrl: Int => Uri): String =
     def req(url: Uri) = basicRequest.get(url).response(asString.getRight).send(backend).body
 
@@ -103,6 +195,13 @@ object EasyRacerClient:
 //    race(reqRes, reqRes)
 //  }
 
+  /**
+   * Make 10 concurrent requests where 5 return a 200 response with a letter
+   * When assembled in order of when they responded, form the "right" answer
+   *
+   * @param scenarioUrl
+   * @return
+   */
   def scenario9(scenarioUrl: Int => Uri): String =
     def req =
       val body = basicRequest.get(scenarioUrl(9)).response(asString.getRight).send(backend).body
