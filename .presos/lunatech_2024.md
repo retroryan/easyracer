@@ -8,11 +8,19 @@
 
 ---
 
-## What is Structured Concurrency?
+## Why do we need Structured Concurrency?
 
 <!--
 Why concurrency is / has been hard (shared mutable state, mutexes, etc)
-Hierarchical Concurrency (diagram)
+ * Shared Mutable State
+ * Mutexes and Locks - Synchronization primitives to protect shared resources
+ * Non-determinism - Race conditions may only occur under specific timing conditions
+ * Scalability Concerns - Contention: Threads competing for shared resources
+                        - Lock granularity trade-offs: Fine-grained vs. coarse-grained locking    
+ *  Complexity in Design and Implementation
+
+
+Hierarchical Concurrency (diagram)  - hierarchical concurrency organizes concurrent tasks into a tree-like structure
 -->
 
 ---
@@ -23,8 +31,18 @@ Hierarchical Concurrency (diagram)
 * Resource management
 * Efficient thread utilization (i.e. reactive, non-blocking)
 * Explicit timeouts
-* Semantic Errors
+* Semantic Errors and Error Propigation
 
+<!--
+ * Cancelling a parent task automatically cancels all its children - Tree pruning
+ * Resource management: Resources can be allocated at a parent level and automatically shared with child tasks
+ * Resource Management - tying resource lifetimes to the scope of concurrent operations
+ * Efficient thread utilization - structured concurrency, especially when implemented with coroutines or similar constructs, allows for efficient use of threads. it enables writing seemingly sequential code that is actually non-blocking and reactive.
+ * Semantic Errors - more meaningful error scenarios. errors in child tasks can be propagated up the hierarchy, maintaining context
+ * Error Propigation: Errors in child tasks can be efficiently communicated up the hierarchy
+
+Hierarchical Concurrency (diagram)  - hierarchical concurrency organizes concurrent tasks into a tree-like structure
+-->
 ---
 
 ## Easy Racer
@@ -87,6 +105,25 @@ Hierarchical Concurrency (diagram)
 
 ---
 
+## Scenario 1 - Java Fork/Join
+
+@[code lang=scala transclude={6-52}](@/../java-fork-join/EasyRacerClient.java)
+
+<!--
+
+-->
+
+---
+
+## Scenario 1 - Problems with Java Fork/Join
+
+* Lack of proper cancellation - no mechanismto cancel the loosing task
+* Inefficent thread utilizaiton
+* Potential errors include the possibility of both tasks failing silently, returning null, and the main thread interpreting this as a successful race with no winner
+
+---
+
+
 ## Scenario 1 - Scala Ox
 
 @[code lang=scala transclude={19-22}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
@@ -106,15 +143,7 @@ Hierarchical Concurrency (diagram)
 -->
 
 ---
-## Scenario 1 - Kotlin Coroutines
 
-@[code lang=kotlin transclude={23-32}](@/../kotlin-coroutines/src/main/kotlin/Main.kt)
-
-<!--
-
--->
-
----
 
 ## Scenario 2
 
