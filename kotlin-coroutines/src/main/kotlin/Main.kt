@@ -20,14 +20,18 @@ val client = HttpClient {
 }
 
 // Note: Intentionally, only url handling code is shared across scenarios
+
+//coroutineScope ensures that all child coroutines complete (or are cancelled) before the function returns,
+//maintain a clear hierarchy and lifecycle for concurrent operations
+//suspend -  indicating this function can be paused and resumed
 suspend fun scenario1(url: (Int) -> String): String = coroutineScope {
     try {
-        select {
-            async { client.get(url(1)) }.onAwait { it }
+        select { //implements a race between two HTTP requests.
+            async { client.get(url(1)) }.onAwait { it } //it is Kotlin's implicit name for a single parameter in a lambda expression
             async { client.get(url(1)) }.onAwait { it }
         }.bodyAsText()
     } finally {
-        coroutineContext.cancelChildren()
+        coroutineContext.cancelChildren() //ensures that resources are properly cleaned up, even if an exception occurs
     }
 }
 
@@ -47,7 +51,7 @@ suspend fun scenario2(url: (Int) -> String): String = coroutineScope {
                 } catch (_: Exception) {
                     awaitCancellation()
                 }
-            }.onAwait { it }
+            }.onAwait { it } // it is Kotlin's implicit name for a single parameter in a lambda expression
         }.bodyAsText()
     } finally {
         coroutineContext.cancelChildren()
@@ -140,13 +144,13 @@ suspend fun scenario7(url: (Int) -> String): String = coroutineScope {
 }
 
 suspend fun scenario8(url: (Int) -> String): String = coroutineScope {
-    suspend fun req(): String {
+    suspend fun req(): String { //nested hierarchy of child with suspend 
         val id = client.get(url(8) + "?open").bodyAsText()
-        return client.get(url(8) + "?use=$id").let {
-            client.get(url(8) + "?close=$id").bodyAsText()
+        return client.get(url(8) + "?use=$id").let { //create new scope passing into lambda result of operation
+            client.get(url(8) + "?close=$id").bodyAsText()  //chain async api calls
 
             if (it.status.isSuccess()) it.bodyAsText()
-            else awaitCancellation()
+            else awaitCancellation() //Conditional Cancellation
         }
     }
 
