@@ -43,19 +43,16 @@ func httpText(url string, ctx context.Context) (string, error) {
 func scenario1(scenarioURL func(int) string) string {
 	url := scenarioURL(1)
 	result := make(chan string)
-	var wg sync.WaitGroup
-	defer wg.Wait()
+	
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	httpTextToChannel := func() {
-		defer wg.Done()
 		text, err := httpText(url, ctx)
 		if err == nil {
 			result <- text
 		}
 	}
 
-	wg.Add(2)
 	go httpTextToChannel()
 	go httpTextToChannel()
 
