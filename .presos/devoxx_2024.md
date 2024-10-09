@@ -340,6 +340,27 @@ graph TD
 * Scoped: Automatically cleaned up when the scope ends
 * Thread-confined: Only accessible within the thread where they're set
 
+```mermaid
+graph LR
+    A[Thread Execution] --> B{Create ScopedValue}
+    B --> C[Define initial container]
+    C --> D{where.run}
+    D --> E[Create new binding]
+    E --> F[Execute code within scope]
+    F --> G[Use value with .get]
+    G --> H[Continue execution]
+    H --> I{Exit scope?}
+    I -->|No| G
+    I -->|Yes| J[Cleanup value]
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style D fill:#bbf,stroke:#333,stroke-width:2px
+    style I fill:#bbf,stroke:#333,stroke-width:2px
+    style F fill:#bfb,stroke:#333,stroke-width:2px
+    style J fill:#fbb,stroke:#333,stroke-width:2px
+```
+
 ---
 
 ## Scenario 7 with ScopedValues
@@ -385,6 +406,3 @@ graph TD
 ## Scenario 7 - Scala Ox ForkLocal - Scoped Values Setup Usage
 
 @[code lang=scala transclude={67-87}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
-
----
-
