@@ -8,13 +8,27 @@ import sttp.model.Uri.QuerySegment
 
 import java.lang.management.ManagementFactory
 import java.security.MessageDigest
+import java.util.UUID
 import scala.annotation.tailrec
-import scala.util.Random
+import scala.util.{Failure, Random, Success, Try}
 
 
 object EasyRacerClient extends OxApp.Simple:
   private val backend = HttpClientSyncBackend()
-  private def scenarioRequest(uri: Uri): Request[String, Any] = basicRequest.get(uri).response(asStringAlways)
+
+  // Create a ForkLocal to store a request ID
+  private val requestId = ForkLocal(UUID.randomUUID().toString)
+
+  private def scenarioRequest(uri: Uri): Request[String, Any] =
+    val id = requestId.get()
+    println(s"[Request ID: $id] Sending request to: $uri")
+    basicRequest
+      .get(uri)
+      .response(asStringAlways)
+      .mapResponse { response =>
+        println(s"[Request ID: $id] Received response from: $uri")
+        response
+      }
 
   def scenario1(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(1)
@@ -47,13 +61,31 @@ object EasyRacerClient extends OxApp.Simple:
     def req = basicRequest.get(url).response(asString.getRight).send(backend).body
     race(req, req, req)
 
+  /** Start a request, wait at least 3 seconds then start a second request (hedging) The winner returns a 200 response with a body
+   * containing right
+   */
   def scenario7(scenarioUrl: Int => Uri): String =
     val url = scenarioUrl(7)
-    def req = scenarioRequest(url).send(backend).body
-    def delayedReq =
-      Thread.sleep(4000)
-      req
+    println(s"Calling scenario 7 with url: $url")
+
+    def req = supervised {
+      val id = s"scenario3-req-${UUID.randomUUID()}"
+      requestId.supervisedWhere(id) {
+        println(s"Starting request with ID: ${requestId.get()}")
+        scenarioRequest(url).send(backend).body
+      }
+    }
+
+    def delayedReq = supervised {
+      val id = s"scenario2-req-${UUID.randomUUID()}"
+      Thread.sleep(3000)
+      requestId.supervisedWhere(id) {
+        println(s"Starting request with ID: ${requestId.get()}")
+        scenarioRequest(url).send(backend).body
+      }
+    }
     race(req, delayedReq)
+
 
   def scenario8(scenarioUrl: Int => Uri): String =
     def req(url: Uri) = basicRequest.get(url).response(asString.getRight).send(backend).body
@@ -116,7 +148,7 @@ object EasyRacerClient extends OxApp.Simple:
 
   def run(using Ox): Unit =
     def scenarioUrl(scenario: Int) = uri"http://localhost:8080/$scenario"
-    def scenarios = Seq(scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario7, scenario8, scenario9, scenario10)
-//    def scenarios: Seq[(Int => Uri) => String] = Seq(scenario8)
+//    def scenarios = Seq(scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario7, scenario8, scenario9, scenario10)
+    def scenarios: Seq[(Int => Uri) => String] = Seq(scenario7)
     scenarios.foreach: s =>
       println(s(scenarioUrl))
