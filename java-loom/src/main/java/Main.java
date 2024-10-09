@@ -30,12 +30,13 @@ public class Main {
         private final HttpClient client;
 
         private static final Logger LOGGER = Logger.getLogger(Scenarios.class.getName());
-        private static final ScopedValue<String> OPERATION_ID = ScopedValue.newInstance();
 
         Scenarios(URI url) {
             this.url = url;
             this.client = HttpClient.newHttpClient();
         }
+
+        private static final ScopedValue<String> OPERATION_ID = ScopedValue.newInstance();
 
         //Add logging using the Scoped Value OPERATION_ID to demonstrate scoped values
         private String sendRequest(HttpRequest req) throws Exception {
@@ -158,7 +159,7 @@ public class Main {
                 return "Unhandled error occurred";
             }
         }
-x
+
         /**
          * Start a request, wait at least 3 seconds then start a second request (hedging)
          * The winner returns a 200 response with a body containing right
@@ -176,10 +177,8 @@ x
 
                 // Start the second request (hedge)
                 scope.fork(() -> {
-
                     // Wait for 3 seconds before starting the second request
                     Thread.sleep(3000);
-
                     LOGGER.info("Starting second request (hedge)");
                     return sendRequest(req);
                 });
