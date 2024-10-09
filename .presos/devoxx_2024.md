@@ -335,11 +335,13 @@ graph TD
 
 ## ScopedValue
 
-
+* Immutable: Values cannot be changed once set
+* Scoped: Automatically cleaned up when the scope ends
+* Thread-confined: Only accessible within the thread where they're set
 
 ---
 
-## Scenario 7
+## Scenario 7 with ScopedValues
 
 ### Start a request, wait at least 3 seconds then start a second request (hedging)
 
