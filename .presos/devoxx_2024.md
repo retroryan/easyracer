@@ -4,6 +4,7 @@
 *CEO @ Grand Cloud*
 <a href="https://twitter.com/knight_cloud" class="twitter-follow-button" data-size="large">@knight_cloud</a><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 *Cloud Architect @ <a href="https://audioenhancement.com/" class="twitter-follow-button" data-size="large">Audio Enhancement</a>*
+*Technical Advisor at Berry Fertility*
 
 #### James Ward
 *DX for Q Developer @ AWS*
