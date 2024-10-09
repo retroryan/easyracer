@@ -233,13 +233,11 @@ graph TD
 
 -->
 
----
+<!--
 
 ## Scenario 2 - Kotlin Splitties
 
 @[code lang=kotlin transclude={38-51}](@/../kotlin-splitties/src/main/kotlin/Main.kt)
-
-<!--
 
 -->
 
@@ -291,27 +289,6 @@ graph TD
 
 ---
 
-## Scenario 5
-
-### Race 2 concurrent requests where a non-200 response is a loser
-
-<!--
-* Modifying the task based on the value it produces
-* Different HTTP clients handle response codes differently and some mapping of non-2xx to fail the request is sometimes necessary
--->
-
----
-
-## Scenario 5 - Java Loom
-
-@[code lang=java transclude={106-126}](@/../java-loom/src/main/java/Main.java)
-
-<!--
-
--->
-
----
-
 ## Scenario 8
 
 ### Race 2 concurrent requests that "use" a resource which is obtained and released through other requests. The "use" request can return a non-20x request, in which case it is not a winner.
@@ -328,7 +305,7 @@ graph TD
 ---
 ## Scenario 8 - Scala Ox
 
-@[code lang=scala transclude={58-70}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
+@[code lang=scala transclude={90-101}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
 
 <!--
 
