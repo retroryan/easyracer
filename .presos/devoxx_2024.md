@@ -394,3 +394,17 @@ graph TD
 
 -->
 
+---
+
+## Scenario 7 - Scala Ox ForkLocal - Scoped Values Setup
+
+@[code lang=scala transclude={28-31}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
+
+---
+
+## Scenario 7 - Scala Ox ForkLocal - Scoped Values Setup Usage
+
+@[code lang=scala transclude={67-87}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
+
+---
+
