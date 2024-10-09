@@ -17,6 +17,8 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.IntStream;
 import java.util.concurrent.StructuredTaskScope;
 
@@ -27,9 +29,19 @@ public class Main {
         private final URI url;
         private final HttpClient client;
 
+        private static final Logger LOGGER = Logger.getLogger(Scenarios.class.getName());
+        private static final ScopedValue<String> OPERATION_ID = ScopedValue.newInstance();
+
         Scenarios(URI url) {
             this.url = url;
             this.client = HttpClient.newHttpClient();
+        }
+
+        //Add logging using the Scoped Value OPERATION_ID to demonstrate scoped values
+        private String sendRequest(HttpRequest req) throws Exception {
+            LOGGER.info("Sending request for operation: " + OPERATION_ID.get());
+            HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
+            return response.body();
         }
 
         public String scenario1() throws ExecutionException, InterruptedException {
@@ -137,16 +149,44 @@ public class Main {
         }
 
 
-        public String scenario7() throws ExecutionException, InterruptedException {
+        public String scenario7() {
+            LOGGER.info("Calling method: scenario7");
+            try {
+                return ScopedValue.where(OPERATION_ID, "SCENARIO_7").call(this::runScenario7);
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Unhandled error in scenario7", e);
+                return "Unhandled error occurred";
+            }
+        }
+x
+        /**
+         * Start a request, wait at least 3 seconds then start a second request (hedging)
+         * The winner returns a 200 response with a body containing right
+         *
+         * @return
+         */
+        private String runScenario7() throws InterruptedException, ExecutionException {
             var req = HttpRequest.newBuilder(url.resolve("/7")).build();
-            try (var scope = new StructuredTaskScope.ShutdownOnSuccess<HttpResponse<String>>()) {
-                scope.fork(() -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+            try (var scope = new StructuredTaskScope.ShutdownOnSuccess<String>()) {
+                // Start the first request
                 scope.fork(() -> {
-                    Thread.sleep(3000);
-                    return client.send(req, HttpResponse.BodyHandlers.ofString());
+                    LOGGER.info("Starting first request");
+                    return sendRequest(req);
                 });
+
+                // Start the second request (hedge)
+                scope.fork(() -> {
+
+                    // Wait for 3 seconds before starting the second request
+                    Thread.sleep(3000);
+
+                    LOGGER.info("Starting second request (hedge)");
+                    return sendRequest(req);
+                });
+
+                // Wait for either request to complete
                 scope.join();
-                return scope.result().body();
+                return scope.result();
             }
         }
 
@@ -284,8 +324,8 @@ public class Main {
         }
 
         List<String> results() throws ExecutionException, InterruptedException {
-            return List.of(scenario1(), scenario2(), scenario3(), scenario4(), scenario5(), scenario6(), scenario7(), scenario8(), scenario9());
-            //return List.of(scenario10());
+//            return List.of(scenario1(), scenario2(), scenario3(), scenario4(), scenario5(), scenario6(), scenario7(), scenario8(), scenario9());
+            return List.of(scenario7());
         }
     }
 
