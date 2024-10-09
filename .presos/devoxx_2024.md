@@ -126,7 +126,7 @@ graph TD
 
 ## Scenario 1 - Scala Ox
 
-@[code lang=scala transclude={19-22}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
+@[code lang=scala transclude={33-36}](@/../scala-ox/src/main/scala/EasyRacerClient.scala)
 
 <!--
 Higher level abstraction on Loom
