@@ -1,7 +1,7 @@
 ## Structured Concurrency: Managing the Hierarchical Cancelation and Error Handling
 
 #### Ryan Knight
-*CEO @ Grand Cloud*
+*CEO @ Grand Cloud, Data Engineering at Scale*
 <a href="https://twitter.com/knight_cloud" class="twitter-follow-button" data-size="large">@knight_cloud</a><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 *Cloud Architect @ <a href="https://audioenhancement.com/" class="twitter-follow-button" data-size="large">Audio Enhancement</a>*
 *Technical Advisor at Berry Fertility*
